@@ -41,6 +41,8 @@ RUN --mount=type=cache,id=storedog-go-apm-example,target=/go/build-cache \
 
 FROM debian:bookworm
 ARG VERSION=dev
+# Which simulated release this image is: none (healthy), errors or latency. Env vars can still override it.
+ARG FAULT_MODE=none
 # Git info for the Datadog Source Code Integration, so Error Tracking can link stack frames to this repo.
 ARG DD_GIT_REPOSITORY_URL=github.com/datadog-asean-se/storedog-go-apm-example
 ARG DD_GIT_COMMIT_SHA=
