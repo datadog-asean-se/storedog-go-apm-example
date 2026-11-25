@@ -15,8 +15,12 @@ import (
 	"github.com/datadog-asean-se/storedog-go-apm-example/internal/telemetry"
 )
 
+// version is set at build time with -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	log := telemetry.Logger()
+	log.Info("starting", "role", os.Getenv("SHOP_ROLE"), "build_version", version)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

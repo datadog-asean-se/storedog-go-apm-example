@@ -16,6 +16,8 @@
 FROM --platform=$BUILDPLATFORM golang:1.26 AS build
 ARG TARGETOS
 ARG TARGETARCH
+# App version, baked into the binary and logged at startup. DD_VERSION itself is set at deploy time.
+ARG VERSION=dev
 WORKDIR /app
 
 # Dependency layer first, so it is cached until go.mod / go.sum change.
@@ -35,9 +37,11 @@ ENV GOFLAGS="'-toolexec=orchestrion toolexec'"
 # Optional: BuildKit cache for faster rebuilds. The id keeps this cache separate from other projects.
 ENV GOCACHE=/go/build-cache
 RUN --mount=type=cache,id=storedog-go-apm-example,target=/go/build-cache \
-    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o=main ./cmd/shop
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags "-X main.version=${VERSION}" -o=main ./cmd/shop
 
 FROM debian:bookworm
+ARG VERSION=dev
+LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.source="https://github.com/datadog-asean-se/storedog-go-apm-example"
 RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin app
 COPY --from=build /app/main /usr/local/bin/main

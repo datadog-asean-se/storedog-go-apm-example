@@ -41,6 +41,27 @@ make deploy-local
 
 Variables you can override: `NAMESPACE` (default `storedog`), `IMAGE`, and `OVERLAY` (see Troubleshooting).
 
+## Versioning
+
+One file, `VERSION`, holds the app version (semantic versioning, `1.0.0`). It drives:
+
+| Where | What |
+|---|---|
+| Image tag | the workflow pushes `ghcr.io/datadog-asean-se/storedog-go-apm-example:1.0.0`, plus `latest` and the commit SHA |
+| `DD_VERSION` | the pod label `tags.datadoghq.com/version` in `deploy/base` (the Datadog `version` tag on traces, logs and profiles) |
+| Binary | `-ldflags "-X main.version=..."`, logged at startup as `build_version` |
+
+To release a new version:
+
+```bash
+make set-version V=1.1.0          # updates VERSION, the image tag and the version label in every manifest
+git commit -am "Release 1.1.0" && git push
+git tag v1.1.0 && git push --tags
+make deploy                       # after the workflow has pushed the new image
+```
+
+In Datadog, filter traces by `version:1.1.0` and compare it with `version:1.0.0` to see the effect of a change.
+
 ## Trace tour: what to look at
 
 1. **Distributed trace.** Open any `POST /api/checkout` trace. One trace spans loadgen → gateway → inventory → SQLite and gateway → payment → card-network.

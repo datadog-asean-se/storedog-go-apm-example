@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: shop
-          image: ghcr.io/datadog-asean-se/storedog-go-apm-example:latest
+          image: ghcr.io/datadog-asean-se/storedog-go-apm-example:1.0.0
           imagePullPolicy: Always
           env:
             - name: SHOP_ROLE

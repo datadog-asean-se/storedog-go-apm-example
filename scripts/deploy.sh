@@ -4,15 +4,16 @@
 #   BUILD=1 ./scripts/deploy.sh    build the image locally with Docker and load it into the cluster
 set -euo pipefail
 
-REGISTRY_IMAGE="ghcr.io/datadog-asean-se/storedog-go-apm-example:latest"
+cd "$(dirname "$0")/.."
+VERSION="$(tr -d '[:space:]' < VERSION)"
+REGISTRY_IMAGE="ghcr.io/datadog-asean-se/storedog-go-apm-example:${VERSION}"
 IMAGE="${IMAGE:-$REGISTRY_IMAGE}"
 NAMESPACE="${NAMESPACE:-storedog}"
 OVERLAY="${OVERLAY:-base}"   # base | overlays/hostip
 BUILD="${BUILD:-0}"
-cd "$(dirname "$0")/.."
 
 CTX="$(kubectl config current-context)"
-echo "==> kubectl context: ${CTX}  namespace: ${NAMESPACE}  image: ${IMAGE}"
+echo "==> kubectl context: ${CTX}  namespace: ${NAMESPACE}  image: ${IMAGE}  DD_VERSION: ${VERSION}"
 
 PULL_POLICY="Always"
 if [ "${BUILD}" = "1" ]; then
@@ -21,7 +22,7 @@ if [ "${BUILD}" = "1" ]; then
   for b in docker podman nerdctl; do command -v "$b" >/dev/null 2>&1 && BUILDER="$b" && break; done
   [ -n "$BUILDER" ] || { echo "BUILD=1 needs docker, podman or nerdctl" >&2; exit 1; }
   echo "==> Building ${IMAGE} with ${BUILDER}"
-  DOCKER_BUILDKIT=1 "$BUILDER" build -t "${IMAGE}" .
+  DOCKER_BUILDKIT=1 "$BUILDER" build --build-arg VERSION="${VERSION}" -t "${IMAGE}" .
   case "${CTX}" in
     kind-*)     kind load docker-image "${IMAGE}" --name "${CTX#kind-}" ;;
     minikube*)  minikube image load "${IMAGE}" ;;
@@ -36,7 +37,7 @@ kubectl get ns "${NAMESPACE}" >/dev/null 2>&1 || kubectl create ns "${NAMESPACE}
 kubectl kustomize "deploy/${OVERLAY}" \
   | sed -e "s|image: ${REGISTRY_IMAGE}|image: ${IMAGE}|" -e "s|imagePullPolicy: Always|imagePullPolicy: ${PULL_POLICY}|" \
   | kubectl apply -n "${NAMESPACE}" -f -
-# Recreate pods so a new :latest image is picked up.
+# Restart so the pods pick up the image and version label.
 kubectl -n "${NAMESPACE}" rollout restart deploy/shop-gateway deploy/shop-inventory deploy/shop-payment deploy/shop-loadgen
 for d in shop-inventory shop-payment shop-gateway shop-loadgen; do
   kubectl -n "${NAMESPACE}" rollout status "deploy/${d}" --timeout=180s
