@@ -55,6 +55,8 @@ Variables you can override: `NAMESPACE` (default `storedog`), `IMAGE`, and `OVER
 
 ## How the instrumentation works
 
+**What is Orchestrion?** It is a Datadog tool for Go that adds tracing at compile time. Go has no runtime agent to attach, so Orchestrion instead rewrites the supported libraries while the compiler runs and starts the tracer for you. Your source code keeps no tracing wrappers.
+
 - `orchestrion.tool.go` and `go.mod` pin Orchestrion (created once with `orchestrion pin`).
 - The [Dockerfile](Dockerfile) installs the pinned Orchestrion, sets `GOFLAGS="'-toolexec=orchestrion toolexec'"`, and then runs a plain `go build`. At compile time it instruments `net/http`, `database/sql` and `log/slog`, and starts the tracer. Set `DD_PROFILING_ENABLED=true` (the manifests do) to run the continuous profiler.
 - The application code only uses the tracer API for **business spans** and tags (`tracer.StartSpanFromContext`, `span.SetTag`). That is optional; the HTTP, SQL and log instrumentation needs no code at all.

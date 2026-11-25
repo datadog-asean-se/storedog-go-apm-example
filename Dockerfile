@@ -1,7 +1,17 @@
-# Build with Orchestrion, following
+# Build with Datadog Orchestrion, following
 # https://docs.datadoghq.com/tracing/guide/orchestrion_dockerfile/
-# Orchestrion rewrites the Go source at compile time, so the app has no tracer.Start call.
-# This file uses the GOFLAGS -toolexec method; `orchestrion go build` is the equivalent one-liner.
+#
+# What Orchestrion is: a Datadog tool for Go that adds tracing at COMPILE time. Go has no
+# runtime agent to attach, so instead of adding tracer.Start() and wrapper code by hand,
+# Orchestrion rewrites the supported libraries (net/http, database/sql, log/slog, ...) while
+# the compiler runs, and starts the tracer and profiler for you. The source code stays clean.
+#
+# How it plugs into this build:
+#   1. go.mod pins the Orchestrion version (orchestrion.tool.go), so builds are repeatable.
+#   2. `go install` puts the orchestrion binary on the PATH.
+#   3. GOFLAGS="-toolexec=orchestrion toolexec" makes every compile step run through it.
+#      `orchestrion go build` is an equivalent one-line alternative.
+#   4. The runtime image holds only the instrumented binary. Nothing else is installed.
 # Build on the runner's own architecture and cross-compile, so arm64 images need no emulation.
 FROM --platform=$BUILDPLATFORM golang:1.26 AS build
 ARG TARGETOS
