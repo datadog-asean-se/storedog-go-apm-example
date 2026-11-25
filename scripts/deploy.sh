@@ -9,7 +9,7 @@ VERSION="$(tr -d '[:space:]' < VERSION)"
 REGISTRY_IMAGE="ghcr.io/datadog-asean-se/storedog-go-apm-example:${VERSION}"
 IMAGE="${IMAGE:-$REGISTRY_IMAGE}"
 NAMESPACE="${NAMESPACE:-storedog}"
-OVERLAY="${OVERLAY:-base}"   # base | overlays/hostip
+OVERLAY="${OVERLAY:-overlays/versions}"   # overlays/versions (default, three gateway versions) | base (one gateway) | overlays/hostip
 BUILD="${BUILD:-0}"
 
 CTX="$(kubectl config current-context)"
@@ -38,9 +38,8 @@ kubectl kustomize "deploy/${OVERLAY}" \
   | sed -e "s|image: ${REGISTRY_IMAGE}|image: ${IMAGE}|" -e "s|imagePullPolicy: Always|imagePullPolicy: ${PULL_POLICY}|" \
   | kubectl apply -n "${NAMESPACE}" -f -
 # Restart so the pods pick up the image and version label.
-DEPLOYS="shop-inventory shop-payment shop-gateway shop-loadgen"
-kubectl -n "${NAMESPACE}" get deploy shop-gateway-v2 >/dev/null 2>&1 && DEPLOYS="${DEPLOYS} shop-gateway-v2 shop-gateway-v3"
-[ "${OVERLAY}" = "overlays/versions" ] && DEPLOYS="shop-inventory shop-payment shop-gateway shop-gateway-v2 shop-gateway-v3 shop-loadgen"
+# Restart every Deployment this overlay defines, so pods pick up the image and version label.
+DEPLOYS="$(kubectl kustomize "deploy/${OVERLAY}" | awk '/^kind: Deployment/{f=1} f&&/^  name:/{print $2; f=0}')"
 for d in ${DEPLOYS}; do kubectl -n "${NAMESPACE}" rollout restart "deploy/${d}" >/dev/null; done
 for d in ${DEPLOYS}; do
   kubectl -n "${NAMESPACE}" rollout status "deploy/${d}" --timeout=180s

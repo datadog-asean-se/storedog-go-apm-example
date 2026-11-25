@@ -27,7 +27,7 @@ You do not need Go or Docker. You need `kubectl`, `make` and a cluster with the 
 ```bash
 git clone https://github.com/datadog-asean-se/storedog-go-apm-example.git
 cd storedog-go-apm-example
-make deploy            # deploys to namespace storedog, pulling the image from GHCR
+make deploy            # deploys to namespace storedog, pulling the image from GHCR (three gateway versions, see below)
 make status
 ```
 
@@ -60,7 +60,7 @@ The code contains planted bugs ("demo bugs") that the load generator triggers a 
 2. The image already carries the commit SHA and repository URL (`DD_GIT_COMMIT_SHA`, `DD_GIT_REPOSITORY_URL`), so stack frames link to the source.
 3. Bits Code needs write access to the repository that the stack frames point to. Fork this repository, let the forked workflow build and push the image to your own GHCR (it uses `ghcr.io/<your-account>/storedog-go-apm-example` and your repository URL), make that package public, then deploy it:
    ```bash
-   make deploy-versions IMAGE=ghcr.io/<your-account>/storedog-go-apm-example:1.1.0
+   make deploy IMAGE=ghcr.io/<your-account>/storedog-go-apm-example:1.1.0
    ```
 4. In **Error Tracking**, open an issue, then **Review**, then **Investigate this issue** ([Bits Investigation](https://docs.datadoghq.com/error_tracking/bits_investigation/), a Preview feature at the time of writing). If the root cause is in code, Bits Code proposes a diff and offers **Create PR**. It never merges on its own.
 
@@ -68,7 +68,7 @@ The Datadog pages I read do not list the languages Bits Code supports, so confir
 
 ## Gateway versions to compare in APM
 
-`make deploy-versions` runs three gateway versions at the same time, behind one Kubernetes Service:
+`make deploy` runs three gateway versions at the same time, behind one Kubernetes Service:
 
 | Deployment | `version` | Behaviour |
 |---|---|---|
@@ -77,6 +77,8 @@ The Datadog pages I read do not list the languages Bits Code supports, so confir
 | `shop-gateway-v3` | `1.3.0` | about 30% of requests are slow, with 0.4 to 1.3 s delays and some 2.5 s (`FAULT_MODE=latency`) |
 
 All three are the same image. The faults are switched on by environment variables, which keeps the demo simple, and all three share the service name `go-shop-gateway`. In APM, filter or group by `version` to compare error rate and latency per version.
+
+To run only the healthy gateway, use `make deploy-single`. It also removes the other two versions. (`make deploy-versions` still works and is the same as `make deploy`.)
 
 ## Versioning
 

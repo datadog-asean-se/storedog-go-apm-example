@@ -1,13 +1,15 @@
 NAMESPACE ?= storedog
 VERSION   := $(shell cat VERSION)
 IMAGE     ?= ghcr.io/datadog-asean-se/storedog-go-apm-example:$(VERSION)
-OVERLAY   ?= base
+OVERLAY   ?= overlays/versions
 
-.PHONY: deploy deploy-versions deploy-local build set-version version status logs destroy
-deploy:        ## Pull the prebuilt image from GHCR and deploy to $(NAMESPACE) (no Docker needed)
+.PHONY: deploy deploy-versions deploy-single deploy-local build set-version version status logs destroy
+deploy:        ## Pull the prebuilt image from GHCR and deploy all three gateway versions to $(NAMESPACE) (no Docker needed)
 	IMAGE=$(IMAGE) NAMESPACE=$(NAMESPACE) OVERLAY=$(OVERLAY) ./scripts/deploy.sh
-deploy-versions: ## Deploy three gateway versions (1.1.0 healthy, 1.2.0 errors, 1.3.0 slow) to compare in APM
-	IMAGE=$(IMAGE) NAMESPACE=$(NAMESPACE) OVERLAY=overlays/versions ./scripts/deploy.sh
+deploy-versions: deploy  ## Same as deploy (kept for older instructions)
+deploy-single: ## Deploy only the healthy gateway (1.1.0) and remove the other two versions
+	-kubectl -n $(NAMESPACE) delete deploy shop-gateway-v2 shop-gateway-v3 --ignore-not-found
+	IMAGE=$(IMAGE) NAMESPACE=$(NAMESPACE) OVERLAY=base ./scripts/deploy.sh
 deploy-local:  ## Build the image locally with Docker, load it into the cluster, deploy
 	BUILD=1 NAMESPACE=$(NAMESPACE) OVERLAY=$(OVERLAY) ./scripts/deploy.sh
 build:         ## Build the image only
