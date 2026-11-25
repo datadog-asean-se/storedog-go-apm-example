@@ -8,6 +8,8 @@ import (
 
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/ext"
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/tracer"
+
+	"github.com/datadog-asean-se/storedog-go-apm-example/internal/telemetry"
 )
 
 // Handle registers h on mux with panic recovery applied inside the traced request, so the
@@ -23,15 +25,16 @@ func Recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
+				err, isErr := rec.(error)
+				if !isErr {
+					err = fmt.Errorf("%v", rec)
+				}
+				telemetry.LogError(r.Context(), "panic recovered", err, "error.stack", string(debug.Stack()), "http.method", r.Method, "http.url", r.URL.Path)
 				if span, ok := tracer.SpanFromContext(r.Context()); ok {
 					// The HTTP integration overwrites error.type and error.message with a generic
 					// "500: Internal Server Error" when it finishes the span. Finishing the span
 					// here, with the real error, keeps the real type (for example
 					// runtime.boundsError) and message so Error Tracking can group each bug.
-					err, isErr := rec.(error)
-					if !isErr {
-						err = fmt.Errorf("%v", rec)
-					}
 					span.SetTag(ext.HTTPCode, "500")
 					span.SetTag(ext.ErrorStack, string(debug.Stack()))
 					span.Finish(tracer.WithError(err))

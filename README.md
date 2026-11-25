@@ -141,6 +141,14 @@ make logs     # print the JSON logs and look for dd.trace_id
 
 For logs to reach Datadog, **log collection must be enabled on the Agent**: `datadog.logs.enabled` and `datadog.logs.containerCollectAll` in the Helm chart, or `spec.features.logCollection` for the Operator ([Kubernetes log collection](https://docs.datadoghq.com/containers/kubernetes/log/)). The pod annotation `ad.datadoghq.com/shop.logs` in `deploy/base` sets `source:go` and the service name for each container.
 
+**Error logs.** Every place that records an error on a span also writes an `ERROR` log with the same request context, through one helper, [`telemetry.LogError`](internal/telemetry/telemetry.go). The log line has the trace ID, the span ID and Datadog's standard error attributes (`error.kind`, `error.message`, and `error.stack` for panics). In a local run, the trace ID in each error log matched the trace ID of the failing span.
+
+```go
+telemetry.LogError(ctx, "checkout rejected", err)   // ctx = the request context
+```
+
+In Datadog, filter `status:error service:go-shop-*` in **Logs**, open a line, and jump to its trace. In **Error Tracking**, the issue's trace has the same log under its **Logs** tab.
+
 In Datadog, open **Logs**, filter `env:lab service:go-shop-*`, open a log line and use **View Trace** (or open a trace and use its **Logs** tab).
 
 ## Troubleshooting

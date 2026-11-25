@@ -4,6 +4,7 @@ package main
 
 import (
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/tracer"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -20,6 +21,7 @@ var version = "dev"
 
 func main() {
 	log := telemetry.Logger()
+	slog.SetDefault(log) // so package-level slog.*Context calls use the same JSON handler
 	log.Info("starting", "role", os.Getenv("SHOP_ROLE"), "build_version", version)
 
 	sig := make(chan os.Signal, 1)

@@ -10,6 +10,8 @@ import (
 
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/ext"
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/tracer"
+
+	"github.com/datadog-asean-se/storedog-go-apm-example/internal/telemetry"
 )
 
 // Fault injection simulates a bad release. The same image runs three "versions" of the
@@ -51,6 +53,7 @@ func (f faults) wrap(next http.HandlerFunc) http.HandlerFunc {
 			if root, ok := tracer.SpanFromContext(r.Context()); ok {
 				root.SetTag(ext.Error, errRegression)
 			}
+			telemetry.LogError(r.Context(), "pricing lookup failed", errRegression, "fault.mode", f.mode)
 			http.Error(w, errRegression.Error(), http.StatusInternalServerError)
 			return
 		case "latency":

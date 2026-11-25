@@ -16,6 +16,7 @@ import (
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/tracer"
 
 	"github.com/datadog-asean-se/storedog-go-apm-example/internal/httpx"
+	"github.com/datadog-asean-se/storedog-go-apm-example/internal/telemetry"
 )
 
 // DeclinedError is a typed error so Error Tracking shows declines as their own issue.
@@ -59,6 +60,7 @@ func charge(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
 		if root != nil {
 			root.SetTag(ext.Error, err)
 		}
+		telemetry.LogError(ctx, "charge failed after 3 attempts", err)
 		http.Error(w, err.Error(), http.StatusPaymentRequired)
 		return
 	}

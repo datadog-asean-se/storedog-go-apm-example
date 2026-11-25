@@ -17,6 +17,7 @@ import (
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/tracer"
 
 	"github.com/datadog-asean-se/storedog-go-apm-example/internal/httpx"
+	"github.com/datadog-asean-se/storedog-go-apm-example/internal/telemetry"
 )
 
 type gw struct {
@@ -61,6 +62,7 @@ func (g *gw) search(w http.ResponseWriter, r *http.Request) {
 func (g *gw) proxy(w http.ResponseWriter, r *http.Request, url string) {
 	body, status, err := g.get(r.Context(), url)
 	if err != nil {
+		telemetry.LogError(r.Context(), "upstream request failed", err, "upstream", url)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
@@ -84,6 +86,7 @@ func (g *gw) checkout(w http.ResponseWriter, r *http.Request) {
 	defer span.Finish()
 	if err := json.NewDecoder(r.Body).Decode(&cart); err != nil {
 		span.SetTag(ext.Error, err) // e.g. *json.UnmarshalTypeError
+		telemetry.LogError(ctx, "invalid checkout request", err)
 		http.Error(w, "bad cart: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -123,6 +126,7 @@ func (g *gw) checkout(w http.ResponseWriter, r *http.Request) {
 	for err := range errs {
 		if err != nil {
 			span.SetTag(ext.Error, err)
+			telemetry.LogError(ctx, "checkout rejected", err)
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
@@ -140,13 +144,16 @@ func (g *gw) checkout(w http.ResponseWriter, r *http.Request) {
 	resp, err := g.client.Do(req)
 	if err != nil {
 		span.SetTag(ext.Error, err)
+		telemetry.LogError(ctx, "payment request failed", err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 	out, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		span.SetTag(ext.Error, &PaymentFailedError{Status: resp.StatusCode, Body: string(out)})
+		perr := &PaymentFailedError{Status: resp.StatusCode, Body: string(out)}
+		span.SetTag(ext.Error, perr)
+		telemetry.LogError(ctx, "payment failed", perr)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)

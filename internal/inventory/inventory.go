@@ -18,6 +18,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/datadog-asean-se/storedog-go-apm-example/internal/httpx"
+	"github.com/datadog-asean-se/storedog-go-apm-example/internal/telemetry"
 )
 
 type Product struct {
@@ -179,6 +180,7 @@ func (s *server) syncLoop() {
 
 func fail(w http.ResponseWriter, span *tracer.Span, err error) {
 	span.SetTag(ext.Error, err)
+	telemetry.LogError(tracer.ContextWithSpan(context.Background(), span), "inventory query failed", err)
 	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
