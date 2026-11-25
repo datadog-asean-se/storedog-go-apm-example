@@ -58,7 +58,11 @@ The code contains planted bugs ("demo bugs") that the load generator triggers a 
 **To show suggested fixes:**
 1. Set up the GitHub integration, the [Source Code Integration](https://docs.datadoghq.com/integrations/guide/source-code-integration/) and [Bits Code](https://docs.datadoghq.com/bits_ai/bits_code/setup/) for your fork of this repository. Bits Code needs write access to the repository.
 2. The image already carries the commit SHA and repository URL (`DD_GIT_COMMIT_SHA`, `DD_GIT_REPOSITORY_URL`), so stack frames link to the source.
-3. In **Error Tracking**, open an issue, then **Review**, then **Investigate this issue** ([Bits Investigation](https://docs.datadoghq.com/error_tracking/bits_investigation/), a Preview feature at the time of writing). If the root cause is in code, Bits Code proposes a diff and offers **Create PR**. It never merges on its own.
+3. Bits Code needs write access to the repository that the stack frames point to. Fork this repository, let the forked workflow build and push the image to your own GHCR (it uses `ghcr.io/<your-account>/storedog-go-apm-example` and your repository URL), make that package public, then deploy it:
+   ```bash
+   make deploy-versions IMAGE=ghcr.io/<your-account>/storedog-go-apm-example:1.1.0
+   ```
+4. In **Error Tracking**, open an issue, then **Review**, then **Investigate this issue** ([Bits Investigation](https://docs.datadoghq.com/error_tracking/bits_investigation/), a Preview feature at the time of writing). If the root cause is in code, Bits Code proposes a diff and offers **Create PR**. It never merges on its own.
 
 The Datadog pages I read do not list the languages Bits Code supports, so confirm Go support for your org before relying on this in a live demo.
 
