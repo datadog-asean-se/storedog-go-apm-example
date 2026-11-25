@@ -1,6 +1,7 @@
 # Build with Orchestrion, following
 # https://docs.datadoghq.com/tracing/guide/orchestrion_dockerfile/
 # Orchestrion rewrites the Go source at compile time, so the app has no tracer.Start call.
+# This file uses the GOFLAGS -toolexec method; `orchestrion go build` is the equivalent one-liner.
 FROM golang:1.26 AS build
 WORKDIR /app
 
@@ -13,10 +14,15 @@ COPY . .
 # go.mod already pins Orchestrion (see orchestrion.tool.go), so this installs the pinned version.
 RUN go install github.com/DataDog/orchestrion
 
+# From here on every `go` command compiles through Orchestrion (the GOFLAGS toolexec method).
+# Set it AFTER `go install orchestrion`, because the toolexec needs the orchestrion binary to exist.
+# The whole flag is quoted because it contains a space.
+ENV GOFLAGS="'-toolexec=orchestrion toolexec'"
+
 # Optional: BuildKit cache for faster rebuilds. The id keeps this cache separate from other projects.
 ENV GOCACHE=/go/build-cache
 RUN --mount=type=cache,id=storedog-go-apm-example,target=/go/build-cache \
-    orchestrion go build -o=main ./cmd/shop
+    go build -o=main ./cmd/shop
 
 FROM debian:bookworm
 RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin app

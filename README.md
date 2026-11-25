@@ -2,7 +2,7 @@
 
 A small, self-contained Go application that shows Datadog APM for Go. Clone it, build it, and deploy it into the `storedog` namespace of a local Kubernetes cluster. A built-in load generator starts sending traffic right away, so traces appear in Datadog without any manual clicking.
 
-It is instrumented with [Orchestrion](https://docs.datadoghq.com/tracing/trace_collection/automatic_instrumentation/dd_libraries/go/), which adds tracing at compile time. There is **no `tracer.Start()` and no `contrib` wrapper** in the application code. The build follows the [Orchestrion Dockerfile guide](https://docs.datadoghq.com/tracing/guide/orchestrion_dockerfile/).
+It is instrumented with [Orchestrion](https://docs.datadoghq.com/tracing/trace_collection/automatic_instrumentation/dd_libraries/go/), which adds tracing at compile time. There is **no `tracer.Start()` and no `contrib` wrapper** in the application code. The build follows the [Orchestrion Dockerfile guide](https://docs.datadoghq.com/tracing/guide/orchestrion_dockerfile/) and sets `GOFLAGS` so a plain `go build` compiles through Orchestrion.
 
 ## What gets deployed
 
@@ -50,7 +50,7 @@ Variables you can override: `NAMESPACE` (default `storedog`), `IMAGE`, and `OVER
 ## How the instrumentation works
 
 - `orchestrion.tool.go` and `go.mod` pin Orchestrion (created once with `orchestrion pin`).
-- The [Dockerfile](Dockerfile) installs the pinned Orchestrion and builds with `orchestrion go build`. At compile time it instruments `net/http`, `database/sql` and `log/slog`, and starts the tracer. Set `DD_PROFILING_ENABLED=true` (the manifests do) to run the continuous profiler.
+- The [Dockerfile](Dockerfile) installs the pinned Orchestrion, sets `GOFLAGS="'-toolexec=orchestrion toolexec'"`, and then runs a plain `go build`. At compile time it instruments `net/http`, `database/sql` and `log/slog`, and starts the tracer. Set `DD_PROFILING_ENABLED=true` (the manifests do) to run the continuous profiler.
 - The application code only uses the tracer API for **business spans** and tags (`tracer.StartSpanFromContext`, `span.SetTag`). That is optional; the HTTP, SQL and log instrumentation needs no code at all.
 - Service, environment and version come from the pod labels `tags.datadoghq.com/*` (Unified Service Tagging).
 
@@ -59,6 +59,8 @@ Run locally without Docker (needs Go 1.26+):
 ```bash
 go install github.com/DataDog/orchestrion
 orchestrion go build -o shop ./cmd/shop
+# or, equivalently, via GOFLAGS (the whole flag is quoted because it contains a space):
+GOFLAGS="'-toolexec=orchestrion toolexec'" go build -o shop ./cmd/shop
 ```
 
 ## Troubleshooting
