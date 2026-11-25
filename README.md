@@ -22,16 +22,22 @@ One image, four roles (`SHOP_ROLE=gateway|inventory|payment|loadgen`), four Depl
 
 ## Quick start
 
-You do not need Go installed. You need Docker (or Podman), `kubectl`, and a local cluster (kind, minikube, k3d or Docker Desktop) with the Datadog Agent running.
+You do not need Go or Docker. You need `kubectl`, `make` and a cluster with the Datadog Agent running. The cluster pulls the prebuilt image from GitHub Container Registry (`ghcr.io/datadog-asean-se/storedog-go-apm-example`), which a [GitHub Actions workflow](.github/workflows/image.yml) builds for `linux/amd64` and `linux/arm64`.
 
 ```bash
 git clone https://github.com/datadog-asean-se/storedog-go-apm-example.git
 cd storedog-go-apm-example
-make deploy            # builds the image, loads it into the cluster, deploys to namespace storedog
+make deploy            # deploys to namespace storedog, pulling the image from GHCR
 make status
 ```
 
 Then open **APM → Traces** in Datadog and filter on `env:lab service:go-shop-*`. Allow about a minute for the first traces.
+
+To build the image yourself instead (needs Docker, Podman or nerdctl on a local cluster such as kind, minikube, k3d or Docker Desktop):
+
+```bash
+make deploy-local
+```
 
 Variables you can override: `NAMESPACE` (default `storedog`), `IMAGE`, and `OVERLAY` (see Troubleshooting).
 
@@ -78,7 +84,17 @@ If `DD_AGENT_HOST` is missing, the Cluster Agent admission controller did not in
 make deploy OVERLAY=overlays/hostip
 ```
 
-**`ImagePullBackOff`.** The cluster cannot see your local image. Push it to a registry the cluster can pull from and run `make deploy IMAGE=<registry>/<name>:<tag>`.
+**`ImagePullBackOff`.** Check the reason first:
+
+```bash
+kubectl -n storedog describe pod -l app=shop-gateway | grep -A5 Events
+```
+
+The default image is public on GHCR, so the cluster must be able to reach `ghcr.io`. If it cannot, mirror the image to a registry it can reach and deploy with that name:
+
+```bash
+make deploy IMAGE=<registry>/storedog-go-apm-example:latest
+```
 
 **Clean up.**
 
@@ -95,7 +111,8 @@ internal/inventory  SQLite catalogue, N+1, background sync
 internal/payment    retries, fraud check
 internal/loadgen    synthetic traffic
 deploy/base         Kubernetes manifests (kustomize, namespace storedog)
-scripts/deploy.sh   build, load, deploy
+scripts/deploy.sh   deploy (pull from GHCR, or BUILD=1 to build locally)
+.github/workflows   builds and pushes the multi-arch image to GHCR
 ```
 
 This is a demo for learning. It uses simulated payments and in-memory data, and is not production code.

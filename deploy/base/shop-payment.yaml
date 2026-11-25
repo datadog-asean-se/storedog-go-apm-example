@@ -21,8 +21,8 @@ spec:
     spec:
       containers:
         - name: shop
-          image: storedog-go-shop:latest
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/datadog-asean-se/storedog-go-apm-example:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           env:
