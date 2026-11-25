@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-payment
+  labels: &labels
+    app: shop-payment
+    tags.datadoghq.com/env: lab
+    tags.datadoghq.com/service: go-shop-payment
+    tags.datadoghq.com/version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shop-payment
+  template:
+    metadata:
+      labels:
+        <<: *labels
+        # Asks the Cluster Agent admission controller to inject agent connection settings.
+        admission.datadoghq.com/enabled: "true"
+    spec:
+      containers:
+        - name: shop
+          image: storedog-go-shop:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SHOP_ROLE
+              value: payment
+            # Unified Service Tagging, read from the pod labels above.
+            - name: DD_ENV
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['tags.datadoghq.com/env']"}}
+            - name: DD_SERVICE
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['tags.datadoghq.com/service']"}}
+            - name: DD_VERSION
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['tags.datadoghq.com/version']"}}
+            - name: DD_PROFILING_ENABLED
+              value: "true"
+            - name: DD_RUNTIME_METRICS_ENABLED
+              value: "true"
+            - name: DD_TRACE_SAMPLE_RATE
+              value: "1"
+
+          # TCP probes avoid generating a trace for every health check.
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            initialDelaySeconds: 2
+          livenessProbe:
+            tcpSocket: {port: 8080}
+            initialDelaySeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false

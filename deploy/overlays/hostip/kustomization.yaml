@@ -1,0 +1,17 @@
+# Use this overlay if traces do not arrive with the base manifests. It points the
+# tracer at the Datadog Agent on the node (needs hostPort 8126 enabled on the Agent).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: DD_AGENT_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP

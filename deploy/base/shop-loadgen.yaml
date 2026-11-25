@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-loadgen
+  labels: &labels
+    app: shop-loadgen
+    tags.datadoghq.com/env: lab
+    tags.datadoghq.com/service: go-shop-loadgen
+    tags.datadoghq.com/version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shop-loadgen
+  template:
+    metadata:
+      labels:
+        <<: *labels
+        # Asks the Cluster Agent admission controller to inject agent connection settings.
+        admission.datadoghq.com/enabled: "true"
+    spec:
+      containers:
+        - name: shop
+          image: storedog-go-shop:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SHOP_ROLE
+              value: loadgen
+            # Unified Service Tagging, read from the pod labels above.
+            - name: DD_ENV
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['tags.datadoghq.com/env']"}}
+            - name: DD_SERVICE
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['tags.datadoghq.com/service']"}}
+            - name: DD_VERSION
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['tags.datadoghq.com/version']"}}
+            - name: DD_PROFILING_ENABLED
+              value: "true"
+            - name: DD_RUNTIME_METRICS_ENABLED
+              value: "true"
+            - name: DD_TRACE_SAMPLE_RATE
+              value: "1"
+            - name: TARGET_URL
+              value: http://shop-gateway:8080
+            - name: LOAD_INTERVAL
+              value: 1500ms
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
