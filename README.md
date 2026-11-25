@@ -161,7 +161,15 @@ GOFLAGS="'-toolexec=orchestrion toolexec'" go build -o shop ./cmd/shop
 
 ## Correlating logs with traces
 
-The app writes JSON logs to stdout. Every log line written with a context (`log.InfoContext(ctx, ...)`) carries `dd.trace_id` and `dd.span_id`, which Orchestrion adds to `log/slog` at build time. There is no log-correlation code in this repo. This is what I saw when running it locally; the Datadog [connect logs and traces for Go](https://docs.datadoghq.com/tracing/other_telemetry/connect_logs_and_traces/go/) page documents manual injection and logrus, not Orchestrion.
+The app writes JSON logs to stdout. Every log line written with a context (`log.InfoContext(ctx, ...)`) carries `dd.trace_id` and `dd.span_id`. There is no log-correlation code in this repo.
+
+**What the documentation says, and what was observed.** The Datadog page [Connect Go logs and traces](https://docs.datadoghq.com/tracing/other_telemetry/connect_logs_and_traces/go/) documents manual injection for the standard `log` package and a hook for logrus. It does not mention `log/slog` or Orchestrion. Two things point to Orchestrion doing it here:
+- `contrib/log/slog` is in the integration list that the [Orchestrion setup page](https://docs.datadoghq.com/tracing/trace_collection/automatic_instrumentation/dd_libraries/go/) links to ([`orchestrion.tool.go`](https://github.com/DataDog/dd-trace-go/blob/main/orchestrion/all/orchestrion.tool.go)).
+- The tracer's startup log in the running pods reports `"log/slog":{"instrumented":true}`, and the JSON logs carry the IDs. This was checked locally and on a GKE cluster.
+
+No page says that Orchestrion adds the IDs to `slog` automatically, so treat that as observed behaviour. The documented way is to wrap the handler yourself with [`contrib/log/slog`](https://pkg.go.dev/github.com/DataDog/dd-trace-go/contrib/log/slog/v2) (`slogtrace.WrapHandler(slog.NewJSONHandler(os.Stdout, nil))`). The package also has `IsAlreadyWrapped`, which exists so a handler is not wrapped twice.
+
+The ID format is also not described in the pages I re-read. The logs here show a 32-character hex `dd.trace_id` (128-bit); its last 16 characters matched the trace ID of the failing span in a local test.
 
 ```bash
 make logs     # print the JSON logs and look for dd.trace_id
@@ -169,7 +177,7 @@ make logs     # print the JSON logs and look for dd.trace_id
 
 For logs to reach Datadog, **log collection must be enabled on the Agent**: `datadog.logs.enabled` and `datadog.logs.containerCollectAll` in the Helm chart, or `spec.features.logCollection` for the Operator ([Kubernetes log collection](https://docs.datadoghq.com/containers/kubernetes/log/)). The pod annotation `ad.datadoghq.com/shop.logs` in `deploy/base` sets `source:go` and the service name for each container.
 
-**Error logs.** Every place that records an error on a span also writes an `ERROR` log with the same request context, through one helper, [`telemetry.LogError`](internal/telemetry/telemetry.go). The log line has the trace ID, the span ID and Datadog's standard error attributes (`error.kind`, `error.message`, and `error.stack` for panics). In a local run, the trace ID in each error log matched the trace ID of the failing span.
+**Error logs.** Every place that records an error on a span also writes an `ERROR` log with the same request context, through one helper, [`telemetry.LogError`](internal/telemetry/telemetry.go). The log line has the trace ID, the span ID and the error attributes `error.kind`, `error.message` and, for panics, `error.stack`. The Go documentation pages I re-read do not describe error attributes in logs, so check how your log pipeline maps these names. In a local run, the trace ID in each error log matched the trace ID of the failing span.
 
 ```go
 telemetry.LogError(ctx, "checkout rejected", err)   // ctx = the request context
