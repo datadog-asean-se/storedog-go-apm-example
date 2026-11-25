@@ -15,6 +15,8 @@ import (
 
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/ext"
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/tracer"
+
+	"github.com/datadog-asean-se/storedog-go-apm-example/internal/httpx"
 )
 
 type gw struct {
@@ -33,13 +35,19 @@ func Run(addr string, log *slog.Logger) error {
 		log:    log,
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
-	mux.HandleFunc("/api/products", g.products)
-	mux.HandleFunc("/api/search", g.search)
-	mux.HandleFunc("/api/checkout", g.checkout)
-	mux.HandleFunc("/api/panic", g.boom)
+	httpx.Handle(mux, "/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
+	f := faultsFromEnv()
+	log.Info("gateway fault mode", "mode", f.mode, "rate", f.rate)
+	httpx.Handle(mux, "/api/products", f.wrap(g.products))
+	httpx.Handle(mux, "/api/search", f.wrap(g.search))
+	httpx.Handle(mux, "/api/checkout", f.wrap(g.checkout))
+	httpx.Handle(mux, "/api/meta", func(w http.ResponseWriter, r *http.Request) { g.proxy(w, r, g.inventoryURL+"/products/meta") })
+	httpx.Handle(mux, "/api/customer", g.customer)
+	httpx.Handle(mux, "/api/recommendations", g.recommendations)
+	httpx.Handle(mux, "/api/discount", g.discount)
+	httpx.Handle(mux, "/api/panic", g.boom)
 	log.Info("gateway listening", "addr", addr)
-	return http.ListenAndServe(addr, recoverer(mux))
+	return http.ListenAndServe(addr, mux)
 }
 
 func (g *gw) products(w http.ResponseWriter, r *http.Request) {
@@ -72,12 +80,17 @@ func (g *gw) checkout(w http.ResponseWriter, r *http.Request) {
 		Items []cartItem `json:"items"`
 		Tier  string     `json:"tier"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&cart); err != nil || len(cart.Items) == 0 {
-		http.Error(w, "bad cart", http.StatusBadRequest)
-		return
-	}
 	span, ctx := tracer.StartSpanFromContext(r.Context(), "checkout.process", tracer.ResourceName("process cart"))
 	defer span.Finish()
+	if err := json.NewDecoder(r.Body).Decode(&cart); err != nil {
+		span.SetTag(ext.Error, err) // e.g. *json.UnmarshalTypeError
+		http.Error(w, "bad cart: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(cart.Items) == 0 {
+		http.Error(w, "empty cart", http.StatusBadRequest)
+		return
+	}
 	span.SetTag("cart.items", len(cart.Items))
 	span.SetTag("customer.tier", cart.Tier)
 
@@ -88,9 +101,19 @@ func (g *gw) checkout(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(it cartItem) {
 			defer wg.Done()
-			_, status, err := g.get(ctx, fmt.Sprintf("%s/stock?sku=%s", g.inventoryURL, it.SKU))
-			if err == nil && status != http.StatusOK {
-				err = fmt.Errorf("sku %s unavailable (%d)", it.SKU, status)
+			body, status, err := g.get(ctx, fmt.Sprintf("%s/stock?sku=%s", g.inventoryURL, it.SKU))
+			switch {
+			case err != nil:
+			case status == http.StatusNotFound:
+				err = &UnknownSKUError{SKU: it.SKU}
+			case status == http.StatusOK:
+				var st struct{ Qty int }
+				json.Unmarshal(body, &st)
+				if st.Qty < it.Qty {
+					err = &InsufficientStockError{SKU: it.SKU, Want: it.Qty, Have: st.Qty}
+				}
+			default:
+				err = fmt.Errorf("inventory returned %d", status)
 			}
 			errs <- err
 		}(it)
@@ -123,7 +146,7 @@ func (g *gw) checkout(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 	out, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		span.SetTag(ext.Error, fmt.Errorf("payment failed: %s", out))
+		span.SetTag(ext.Error, &PaymentFailedError{Status: resp.StatusCode, Body: string(out)})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
@@ -144,22 +167,6 @@ func (g *gw) get(ctx context.Context, url string) ([]byte, int, error) {
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 	return b, resp.StatusCode, nil
-}
-
-func recoverer(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if rec := recover(); rec != nil {
-				if span, ok := tracer.SpanFromContext(r.Context()); ok {
-					span.SetTag(ext.ErrorMsg, fmt.Sprint(rec))
-					span.SetTag(ext.ErrorType, "panic")
-					span.SetTag(ext.ErrorStack, stack())
-				}
-				http.Error(w, "internal error", http.StatusInternalServerError)
-			}
-		}()
-		next.ServeHTTP(w, r)
-	})
 }
 
 func env(k, def string) string {

@@ -41,6 +41,39 @@ make deploy-local
 
 Variables you can override: `NAMESPACE` (default `storedog`), `IMAGE`, and `OVERLAY` (see Troubleshooting).
 
+## Error Tracking and Bits Code demo
+
+The code contains planted bugs ("demo bugs") that the load generator triggers a few percent of the time. Each fails in a different way, so [Error Tracking](https://docs.datadoghq.com/error_tracking/) creates a separate issue for each one.
+
+| Endpoint | Error type | Cause | Code |
+|---|---|---|---|
+| `/api/customer?id=c-999` | `runtime.errorString` (nil pointer dereference) | unknown ID returns `nil`, then `c.Tier` | [bugs.go](internal/gateway/bugs.go) `customer` |
+| `/api/recommendations` | `runtime.boundsError` (index out of range) | reads item 4 of a 3-item slice | `recommendations` |
+| `/api/discount?qty=0` | `runtime.errorString` (integer divide by zero) | divides by `qty` without a check | `discount` |
+| `/api/meta` | `*runtime.TypeAssertionError` | asserts `int` on a JSON number (`float64`) | [inventory.go](internal/inventory/inventory.go) `meta` |
+| `/api/panic` | `runtime.plainError` | writes to a nil map | `boom` |
+| `POST /api/checkout` | `*json.UnmarshalTypeError` | a string where `qty` expects a number | `decodeItems` |
+| `POST /api/checkout` | `*gateway.InsufficientStockError`, `*gateway.UnknownSKUError`, `*gateway.PaymentFailedError`, `*payment.DeclinedError` | typed business errors | `bugs.go`, `payment.go` |
+
+**To show suggested fixes:**
+1. Set up the GitHub integration, the [Source Code Integration](https://docs.datadoghq.com/integrations/guide/source-code-integration/) and [Bits Code](https://docs.datadoghq.com/bits_ai/bits_code/setup/) for your fork of this repository. Bits Code needs write access to the repository.
+2. The image already carries the commit SHA and repository URL (`DD_GIT_COMMIT_SHA`, `DD_GIT_REPOSITORY_URL`), so stack frames link to the source.
+3. In **Error Tracking**, open an issue, then **Review**, then **Investigate this issue** ([Bits Investigation](https://docs.datadoghq.com/error_tracking/bits_investigation/), a Preview feature at the time of writing). If the root cause is in code, Bits Code proposes a diff and offers **Create PR**. It never merges on its own.
+
+The Datadog pages I read do not list the languages Bits Code supports, so confirm Go support for your org before relying on this in a live demo.
+
+## Gateway versions to compare in APM
+
+`make deploy-versions` runs three gateway versions at the same time, behind one Kubernetes Service:
+
+| Deployment | `version` | Behaviour |
+|---|---|---|
+| `shop-gateway` | `1.1.0` | healthy |
+| `shop-gateway-v2` | `1.2.0` | about 30% of requests fail with HTTP 500 (`FAULT_MODE=errors`) |
+| `shop-gateway-v3` | `1.3.0` | about 30% of requests are slow, with 0.4 to 1.3 s delays and some 2.5 s (`FAULT_MODE=latency`) |
+
+All three are the same image. The faults are switched on by environment variables, which keeps the demo simple, and all three share the service name `go-shop-gateway`. In APM, filter or group by `version` to compare error rate and latency per version.
+
 ## Versioning
 
 One file, `VERSION`, holds the app version (semantic versioning, `1.0.0`). It drives:

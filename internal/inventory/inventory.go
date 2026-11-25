@@ -16,6 +16,8 @@ import (
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/ext"
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/tracer"
 	_ "modernc.org/sqlite"
+
+	"github.com/datadog-asean-se/storedog-go-apm-example/internal/httpx"
 )
 
 type Product struct {
@@ -40,10 +42,11 @@ func Run(addr string, log *slog.Logger) error {
 	go s.syncLoop()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
-	mux.HandleFunc("/products", s.products)
-	mux.HandleFunc("/stock", s.stock)
-	mux.HandleFunc("/search", s.search)
+	httpx.Handle(mux, "/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
+	httpx.Handle(mux, "/products", s.products)
+	httpx.Handle(mux, "/stock", s.stock)
+	httpx.Handle(mux, "/search", s.search)
+	httpx.Handle(mux, "/products/meta", s.meta)
 	log.Info("inventory listening", "addr", addr)
 	return http.ListenAndServe(addr, mux)
 }
@@ -182,4 +185,13 @@ func fail(w http.ResponseWriter, span *tracer.Span, err error) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
+}
+
+// demo bug 5: wrong type assertion. JSON numbers decode to float64, but the code asserts int,
+// so this panics with "interface conversion: interface {} is float64, not int".
+func (s *server) meta(w http.ResponseWriter, r *http.Request) {
+	var m map[string]any
+	json.Unmarshal([]byte(`{"weight_g": 120, "warranty_months": 12}`), &m)
+	weight := m["weight_g"].(int)
+	writeJSON(w, map[string]int{"weight_g": weight})
 }

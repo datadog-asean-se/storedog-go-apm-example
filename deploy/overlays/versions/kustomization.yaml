@@ -1,0 +1,16 @@
+# Runs three versions of the gateway side by side, so APM can compare them:
+#   shop-gateway     1.1.0  healthy              (from base)
+#   shop-gateway-v2  1.2.0  ~30% HTTP 500 errors (FAULT_MODE=errors)
+#   shop-gateway-v3  1.3.0  ~30% slow requests   (FAULT_MODE=latency)
+# All three share the Datadog service go-shop-gateway and sit behind the same Kubernetes
+# Service, so the load generator splits traffic across them. It is one image: the faults
+# are switched on by environment variables, which keeps the demo simple.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - shop-gateway-v2.yaml
+  - shop-gateway-v3.yaml
+images:
+  - name: ghcr.io/datadog-asean-se/storedog-go-apm-example
+    newTag: 1.1.0

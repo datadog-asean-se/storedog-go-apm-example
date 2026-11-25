@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Set the app version in one place. Updates VERSION, the image tag and the
-# tags.datadoghq.com/version label (which becomes DD_VERSION) in every manifest.
+# tags.datadoghq.com/version label (which becomes DD_VERSION) in the base manifests. The
+# extra gateway versions in deploy/overlays/versions keep their own version labels.
 # Usage: ./scripts/set-version.sh 1.1.0
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -13,5 +14,6 @@ for f in deploy/base/shop-*.yaml; do
              -e "s|tags.datadoghq.com/version: \"${OLD}\"|tags.datadoghq.com/version: \"${NEW}\"|" "$f"
   rm -f "$f.bak"
 done
+sed -i.bak "s|newTag: ${OLD}|newTag: ${NEW}|" deploy/overlays/versions/kustomization.yaml && rm -f deploy/overlays/versions/kustomization.yaml.bak
 echo "Version ${OLD} -> ${NEW}"
 echo "Next: git commit, push (the image workflow builds ghcr.io/datadog-asean-se/storedog-go-apm-example:${NEW}), then: git tag v${NEW} && git push --tags"

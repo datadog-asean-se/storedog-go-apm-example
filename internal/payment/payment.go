@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand"
@@ -15,14 +14,19 @@ import (
 
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/ext"
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/tracer"
+
+	"github.com/datadog-asean-se/storedog-go-apm-example/internal/httpx"
 )
 
-var errDeclined = errors.New("card declined by issuer")
+// DeclinedError is a typed error so Error Tracking shows declines as their own issue.
+type DeclinedError struct{ Reason string }
+
+func (e *DeclinedError) Error() string { return "card declined by issuer: " + e.Reason }
 
 func Run(addr string, log *slog.Logger) error {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
-	mux.HandleFunc("/charge", func(w http.ResponseWriter, r *http.Request) { charge(w, r, log) })
+	httpx.Handle(mux, "/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
+	httpx.Handle(mux, "/charge", func(w http.ResponseWriter, r *http.Request) { charge(w, r, log) })
 	log.Info("payment listening", "addr", addr)
 	return http.ListenAndServe(addr, mux)
 }
@@ -85,7 +89,7 @@ func callAcquirer(ctx context.Context, attempt int) error {
 	time.Sleep(time.Duration(20+rand.Intn(120)) * time.Millisecond)
 	var err error
 	if rand.Intn(4) == 0 {
-		err = errDeclined
+		err = &DeclinedError{Reason: "insufficient funds"}
 	}
 	span.Finish(tracer.WithError(err))
 	return err

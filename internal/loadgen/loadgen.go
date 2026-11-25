@@ -30,21 +30,39 @@ func Run(log *slog.Logger) {
 	for range time.Tick(interval) {
 		scenario := rand.Intn(100)
 		var req *http.Request
+		post := func(body string) *http.Request {
+			r, _ := http.NewRequest("POST", target+"/api/checkout", bytes.NewReader([]byte(body)))
+			r.Header.Set("Content-Type", "application/json")
+			return r
+		}
+		get := func(path string) *http.Request { r, _ := http.NewRequest("GET", target+path, nil); return r }
 		switch {
-		case scenario < 30: // N+1 product listing
-			req, _ = http.NewRequest("GET", target+"/api/products", nil)
-		case scenario < 40: // same listing, fixed query
-			req, _ = http.NewRequest("GET", target+"/api/products?optimized=true", nil)
-		case scenario < 55:
+		case scenario < 25: // N+1 product listing
+			req = get("/api/products")
+		case scenario < 33: // same listing, fixed query
+			req = get("/api/products?optimized=true")
+		case scenario < 45:
 			terms := []string{"item 1", "item 2", "storedog", "xyz"}
-			req, _ = http.NewRequest("GET", target+"/api/search?q="+terms[rand.Intn(len(terms))], nil)
+			req = get("/api/search?q=" + terms[rand.Intn(len(terms))])
+		case scenario < 80:
+			req = post(string(cart()))
+		// Planted bugs for Error Tracking, each about 2 to 3% of traffic.
+		case scenario < 82: // unknown SKU -> UnknownSKUError
+			req = post(`{"tier":"free","items":[{"sku":"SKU-999","qty":1}]}`)
+		case scenario < 85: // too many units -> InsufficientStockError
+			req = post(`{"tier":"pro","items":[{"sku":"SKU-001","qty":500}]}`)
+		case scenario < 87: // bad JSON type -> *json.UnmarshalTypeError
+			req = post(`{"tier":"pro","items":[{"sku":"SKU-001","qty":"two"}]}`)
+		case scenario < 90:
+			req = get("/api/customer?id=c-999") // nil pointer dereference
 		case scenario < 93:
-			req, _ = http.NewRequest("POST", target+"/api/checkout", bytes.NewReader(cart()))
-			req.Header.Set("Content-Type", "application/json")
-		case scenario < 97: // bad SKU, 409 from inventory
-			req, _ = http.NewRequest("POST", target+"/api/checkout", bytes.NewReader([]byte(`{"tier":"free","items":[{"sku":"SKU-999","qty":1}]}`)))
-		default: // panic path for Error Tracking
-			req, _ = http.NewRequest("GET", target+"/api/panic", nil)
+			req = get("/api/recommendations?sku=SKU-001") // index out of range
+		case scenario < 96:
+			req = get("/api/discount?total=100&qty=0") // integer divide by zero
+		case scenario < 98:
+			req = get("/api/meta") // interface conversion (panics in inventory)
+		default:
+			req = get("/api/panic") // nil map write
 		}
 		resp, err := client.Do(req)
 		if err != nil {

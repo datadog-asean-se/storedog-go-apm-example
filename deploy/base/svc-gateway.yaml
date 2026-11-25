@@ -4,7 +4,7 @@ metadata:
   name: shop-gateway
 spec:
   selector:
-    app: shop-gateway
+    component: gateway   # matches every gateway version (see deploy/overlays/versions)
   ports:
     - port: 8080
       targetPort: 8080

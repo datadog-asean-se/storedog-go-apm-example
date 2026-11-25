@@ -6,7 +6,7 @@ metadata:
     app: shop-payment
     tags.datadoghq.com/env: lab
     tags.datadoghq.com/service: go-shop-payment
-    tags.datadoghq.com/version: "1.0.0"
+    tags.datadoghq.com/version: "1.1.0"
 spec:
   replicas: 1
   selector:
@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: shop
-          image: ghcr.io/datadog-asean-se/storedog-go-apm-example:1.0.0
+          image: ghcr.io/datadog-asean-se/storedog-go-apm-example:1.1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8080

@@ -41,7 +41,13 @@ RUN --mount=type=cache,id=storedog-go-apm-example,target=/go/build-cache \
 
 FROM debian:bookworm
 ARG VERSION=dev
+# Git info for the Datadog Source Code Integration, so Error Tracking can link stack frames to this repo.
+ARG DD_GIT_REPOSITORY_URL=github.com/datadog-asean-se/storedog-go-apm-example
+ARG DD_GIT_COMMIT_SHA=
+ENV DD_GIT_REPOSITORY_URL=${DD_GIT_REPOSITORY_URL}
+ENV DD_GIT_COMMIT_SHA=${DD_GIT_COMMIT_SHA}
 LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${DD_GIT_COMMIT_SHA}"
 LABEL org.opencontainers.image.source="https://github.com/datadog-asean-se/storedog-go-apm-example"
 RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin app
 COPY --from=build /app/main /usr/local/bin/main

@@ -6,7 +6,7 @@ metadata:
     app: shop-gateway
     tags.datadoghq.com/env: lab
     tags.datadoghq.com/service: go-shop-gateway
-    tags.datadoghq.com/version: "1.0.0"
+    tags.datadoghq.com/version: "1.1.0"
 spec:
   replicas: 1
   selector:
@@ -18,13 +18,14 @@ spec:
         <<: *labels
         # Asks the Cluster Agent admission controller to inject agent connection settings.
         admission.datadoghq.com/enabled: "true"
+        component: gateway
       annotations:
         # Sets source and service for this container's logs. Collection itself must be enabled on the Agent.
         ad.datadoghq.com/shop.logs: '[{"source":"go","service":"go-shop-gateway"}]'
     spec:
       containers:
         - name: shop
-          image: ghcr.io/datadog-asean-se/storedog-go-apm-example:1.0.0
+          image: ghcr.io/datadog-asean-se/storedog-go-apm-example:1.1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8080

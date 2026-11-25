@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-gateway-v3
+  labels: &labels
+    app: shop-gateway-v3
+    tags.datadoghq.com/env: lab
+    tags.datadoghq.com/service: go-shop-gateway
+    tags.datadoghq.com/version: "1.3.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shop-gateway-v3
+  template:
+    metadata:
+      labels:
+        <<: *labels
+        # Asks the Cluster Agent admission controller to inject agent connection settings.
+        admission.datadoghq.com/enabled: "true"
+        component: gateway
+      annotations:
+        # Sets source and service for this container's logs. Collection itself must be enabled on the Agent.
+        ad.datadoghq.com/shop.logs: '[{"source":"go","service":"go-shop-gateway"}]'
+    spec:
+      containers:
+        - name: shop
+          image: ghcr.io/datadog-asean-se/storedog-go-apm-example
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SHOP_ROLE
+              value: gateway
+            # Unified Service Tagging, read from the pod labels above.
+            - name: DD_ENV
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['tags.datadoghq.com/env']"}}
+            - name: DD_SERVICE
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['tags.datadoghq.com/service']"}}
+            - name: DD_VERSION
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['tags.datadoghq.com/version']"}}
+            - name: DD_PROFILING_ENABLED
+              value: "true"
+            - name: DD_RUNTIME_METRICS_ENABLED
+              value: "true"
+            - name: DD_TRACE_SAMPLE_RATE
+              value: "1"
+            - name: FAULT_MODE
+              value: "latency"
+            - name: FAULT_RATE
+              value: "0.3"
+            - name: INVENTORY_URL
+              value: http://shop-inventory:8080
+            - name: PAYMENT_URL
+              value: http://shop-payment:8080
+          # TCP probes avoid generating a trace for every health check.
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            initialDelaySeconds: 2
+          livenessProbe:
+            tcpSocket: {port: 8080}
+            initialDelaySeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false

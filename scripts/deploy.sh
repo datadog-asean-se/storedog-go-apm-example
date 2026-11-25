@@ -22,7 +22,7 @@ if [ "${BUILD}" = "1" ]; then
   for b in docker podman nerdctl; do command -v "$b" >/dev/null 2>&1 && BUILDER="$b" && break; done
   [ -n "$BUILDER" ] || { echo "BUILD=1 needs docker, podman or nerdctl" >&2; exit 1; }
   echo "==> Building ${IMAGE} with ${BUILDER}"
-  DOCKER_BUILDKIT=1 "$BUILDER" build --build-arg VERSION="${VERSION}" -t "${IMAGE}" .
+  DOCKER_BUILDKIT=1 "$BUILDER" build --build-arg VERSION="${VERSION}" --build-arg DD_GIT_COMMIT_SHA="$(git rev-parse HEAD)" -t "${IMAGE}" .
   case "${CTX}" in
     kind-*)     kind load docker-image "${IMAGE}" --name "${CTX#kind-}" ;;
     minikube*)  minikube image load "${IMAGE}" ;;
@@ -38,8 +38,11 @@ kubectl kustomize "deploy/${OVERLAY}" \
   | sed -e "s|image: ${REGISTRY_IMAGE}|image: ${IMAGE}|" -e "s|imagePullPolicy: Always|imagePullPolicy: ${PULL_POLICY}|" \
   | kubectl apply -n "${NAMESPACE}" -f -
 # Restart so the pods pick up the image and version label.
-kubectl -n "${NAMESPACE}" rollout restart deploy/shop-gateway deploy/shop-inventory deploy/shop-payment deploy/shop-loadgen
-for d in shop-inventory shop-payment shop-gateway shop-loadgen; do
+DEPLOYS="shop-inventory shop-payment shop-gateway shop-loadgen"
+kubectl -n "${NAMESPACE}" get deploy shop-gateway-v2 >/dev/null 2>&1 && DEPLOYS="${DEPLOYS} shop-gateway-v2 shop-gateway-v3"
+[ "${OVERLAY}" = "overlays/versions" ] && DEPLOYS="shop-inventory shop-payment shop-gateway shop-gateway-v2 shop-gateway-v3 shop-loadgen"
+for d in ${DEPLOYS}; do kubectl -n "${NAMESPACE}" rollout restart "deploy/${d}" >/dev/null; done
+for d in ${DEPLOYS}; do
   kubectl -n "${NAMESPACE}" rollout status "deploy/${d}" --timeout=180s
 done
 
