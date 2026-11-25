@@ -71,6 +71,18 @@ orchestrion go build -o shop ./cmd/shop
 GOFLAGS="'-toolexec=orchestrion toolexec'" go build -o shop ./cmd/shop
 ```
 
+## Correlating logs with traces
+
+The app writes JSON logs to stdout. Every log line written with a context (`log.InfoContext(ctx, ...)`) carries `dd.trace_id` and `dd.span_id`, which Orchestrion adds to `log/slog` at build time. There is no log-correlation code in this repo. This is what I saw when running it locally; the Datadog [connect logs and traces for Go](https://docs.datadoghq.com/tracing/other_telemetry/connect_logs_and_traces/go/) page documents manual injection and logrus, not Orchestrion.
+
+```bash
+make logs     # print the JSON logs and look for dd.trace_id
+```
+
+For logs to reach Datadog, **log collection must be enabled on the Agent**: `datadog.logs.enabled` and `datadog.logs.containerCollectAll` in the Helm chart, or `spec.features.logCollection` for the Operator ([Kubernetes log collection](https://docs.datadoghq.com/containers/kubernetes/log/)). The pod annotation `ad.datadoghq.com/shop.logs` in `deploy/base` sets `source:go` and the service name for each container.
+
+In Datadog, open **Logs**, filter `env:lab service:go-shop-*`, open a log line and use **View Trace** (or open a trace and use its **Logs** tab).
+
 ## Troubleshooting
 
 **No traces after a few minutes.**

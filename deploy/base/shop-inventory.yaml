@@ -18,6 +18,9 @@ spec:
         <<: *labels
         # Asks the Cluster Agent admission controller to inject agent connection settings.
         admission.datadoghq.com/enabled: "true"
+      annotations:
+        # Sets source and service for this container's logs. Collection itself must be enabled on the Agent.
+        ad.datadoghq.com/shop.logs: '[{"source":"go","service":"go-shop-inventory"}]'
     spec:
       containers:
         - name: shop
