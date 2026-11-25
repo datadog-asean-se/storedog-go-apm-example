@@ -14,6 +14,5 @@ for f in deploy/base/shop-*.yaml; do
              -e "s|tags.datadoghq.com/version: \"${OLD}\"|tags.datadoghq.com/version: \"${NEW}\"|" "$f"
   rm -f "$f.bak"
 done
-sed -i.bak "s|newTag: ${OLD}|newTag: ${NEW}|" deploy/overlays/versions/kustomization.yaml && rm -f deploy/overlays/versions/kustomization.yaml.bak
 echo "Version ${OLD} -> ${NEW}"
 echo "Next: git commit, push (the image workflow builds ghcr.io/datadog-asean-se/storedog-go-apm-example:${NEW}), then: git tag v${NEW} && git push --tags"

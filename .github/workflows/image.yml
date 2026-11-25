@@ -1,10 +1,15 @@
 name: image
-# Builds the multi-arch image with Orchestrion and pushes it to GitHub Container Registry,
-# so the lab cluster can pull it without a local Docker build.
+# Builds the multi-arch images with Orchestrion and pushes them to GitHub Container Registry,
+# so the lab cluster can pull them without a local Docker build.
+# Three images are built from the same code, one per simulated release, so that the image tag,
+# the pod label tags.datadoghq.com/version and DD_VERSION always match:
+#   <VERSION file>  healthy (also tagged latest)
+#   1.2.0           FAULT_MODE=errors
+#   1.3.0           FAULT_MODE=latency
 on:
   push:
     branches: [main]
-    paths-ignore: ['**.md', 'deploy/**']
+    paths-ignore: ['**.md']
   workflow_dispatch:
 
 permissions:
@@ -12,14 +17,34 @@ permissions:
   packages: write
 
 jobs:
-  build-push:
+  check-versions:
     runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image tag, pod label and DD_VERSION must match in every manifest
+        run: |
+          pip install pyyaml
+          python3 scripts/check-versions.py
+
+  build-push:
+    needs: check-versions
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {track: stable, version: "", fault: none}
+          - {track: v2, version: "1.2.0", fault: errors}
+          - {track: v3, version: "1.3.0", fault: latency}
     steps:
       - uses: actions/checkout@v4
       - id: img
         run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"   # works in forks too
       - id: ver
-        run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+        run: |
+          v="${{ matrix.version }}"
+          [ -n "$v" ] || v="$(tr -d '[:space:]' < VERSION)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -32,8 +57,8 @@ jobs:
           images: ${{ steps.img.outputs.image }}
           tags: |
             type=raw,value=${{ steps.ver.outputs.version }}
-            type=raw,value=latest
-            type=sha,format=short
+            type=raw,value=latest,enable=${{ matrix.track == 'stable' }}
+            type=sha,format=short,enable=${{ matrix.track == 'stable' }}
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -41,9 +66,10 @@ jobs:
           push: true
           build-args: |
             VERSION=${{ steps.ver.outputs.version }}
+            FAULT_MODE=${{ matrix.fault }}
             DD_GIT_COMMIT_SHA=${{ github.sha }}
             DD_GIT_REPOSITORY_URL=github.com/${{ github.repository }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.track }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.track }}

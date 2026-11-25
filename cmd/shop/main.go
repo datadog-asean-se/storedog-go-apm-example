@@ -23,6 +23,13 @@ func main() {
 	log := telemetry.Logger()
 	slog.SetDefault(log) // so package-level slog.*Context calls use the same JSON handler
 	log.Info("starting", "role", os.Getenv("SHOP_ROLE"), "build_version", version)
+	// DD_VERSION (set from the pod label in Kubernetes) is what Datadog tags traces, logs and
+	// profiles with. It should equal the version baked into this binary.
+	if v := os.Getenv("DD_VERSION"); v == "" {
+		log.Warn("DD_VERSION is not set: traces, logs and profiles will have no version tag")
+	} else if version != "dev" && v != version {
+		log.Warn("DD_VERSION differs from the build version", "dd_version", v, "build_version", version)
+	}
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

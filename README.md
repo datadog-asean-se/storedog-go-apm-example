@@ -76,30 +76,58 @@ The Datadog pages I read do not list the languages Bits Code supports, so confir
 | `shop-gateway-v2` | `1.2.0` | about 30% of requests fail with HTTP 500 (`FAULT_MODE=errors`) |
 | `shop-gateway-v3` | `1.3.0` | about 30% of requests are slow, with 0.4 to 1.3 s delays and some 2.5 s (`FAULT_MODE=latency`) |
 
-All three are the same image. The faults are switched on by environment variables, which keeps the demo simple, and all three share the service name `go-shop-gateway`. In APM, filter or group by `version` to compare error rate and latency per version.
+All three run the same code, built as three images (see Versioning), and share the service name `go-shop-gateway`. In APM, filter or group by `version` to compare error rate and latency per version.
 
 To run only the healthy gateway, use `make deploy-single`. It also removes the other two versions. (`make deploy-versions` still works and is the same as `make deploy`.)
 
 ## Versioning
 
-One file, `VERSION`, holds the app version (semantic versioning, `1.0.0`). It drives:
+The same version string is used everywhere, so Datadog's `version` tag, the image and the Kubernetes objects always agree.
 
-| Where | What |
+| Level | What carries the version |
 |---|---|
-| Image tag | the workflow pushes `ghcr.io/datadog-asean-se/storedog-go-apm-example:1.0.0`, plus `latest` and the commit SHA |
-| `DD_VERSION` | the pod label `tags.datadoghq.com/version` in `deploy/base` (the Datadog `version` tag on traces, logs and profiles) |
-| Binary | `-ldflags "-X main.version=..."`, logged at startup as `build_version` |
+| Source | `VERSION` file (semantic versioning, stable release `1.1.0`) |
+| Image | tag `ghcr.io/datadog-asean-se/storedog-go-apm-example:1.1.0`, plus the `org.opencontainers.image.version` label and `-ldflags "-X main.version=..."` |
+| Kubernetes | the label `tags.datadoghq.com/version` on the **Deployment** and on the **pod template** |
+| `DD_VERSION` | read from that pod label with `fieldRef`, never hard-coded in the manifest |
+| App | the tracer, profiler, runtime metrics and JSON logs all use `DD_VERSION`. At startup the app logs `build_version` and warns if `DD_VERSION` is missing or differs from the build |
 
-To release a new version:
-
-```bash
-make set-version V=1.1.0          # updates VERSION, the image tag and the version label in every manifest
-git commit -am "Release 1.1.0" && git push
-git tag v1.1.0 && git push --tags
-make deploy                       # after the workflow has pushed the new image
+```yaml
+metadata:
+  labels:
+    tags.datadoghq.com/env: lab
+    tags.datadoghq.com/service: go-shop-gateway
+    tags.datadoghq.com/version: "1.1.0"     # on the Deployment...
+spec:
+  template:
+    metadata:
+      labels:
+        tags.datadoghq.com/env: lab
+        tags.datadoghq.com/service: go-shop-gateway
+        tags.datadoghq.com/version: "1.1.0" # ...and on the pod template
+    spec:
+      containers:
+        - image: ghcr.io/datadog-asean-se/storedog-go-apm-example:1.1.0   # same version
+          env:
+            - name: DD_VERSION
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['tags.datadoghq.com/version']"}}
 ```
 
-In Datadog, filter traces by `version:1.1.0` and compare it with `version:1.0.0` to see the effect of a change.
+`make check-versions` (needs `pip install pyyaml`) fails if any Deployment's image tag, Deployment label, pod label or `DD_VERSION` source disagree. The GitHub workflow runs it before building.
+
+The three gateway versions are three images from the same code, built with a different `FAULT_MODE`: `1.1.0` (healthy, also `latest`), `1.2.0` (errors) and `1.3.0` (latency). The stable version comes from `VERSION`; `1.2.0` and `1.3.0` are fixed in the workflow and in `deploy/overlays/versions`.
+
+To release a new stable version:
+
+```bash
+make set-version V=1.4.0          # updates VERSION, the image tag and the version label in deploy/base
+make check-versions
+git commit -am "Release 1.4.0" && git push
+git tag v1.4.0 && git push --tags
+make deploy                       # after the workflow has pushed the new images
+```
+
+In Datadog, filter traces by `version:1.2.0` and compare it with `version:1.1.0` to see the effect of a change. Spans from other services (for example the SQL database or the simulated card network) do not carry the app's `version`.
 
 ## Trace tour: what to look at
 

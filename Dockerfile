@@ -46,6 +46,9 @@ ARG DD_GIT_REPOSITORY_URL=github.com/datadog-asean-se/storedog-go-apm-example
 ARG DD_GIT_COMMIT_SHA=
 ENV DD_GIT_REPOSITORY_URL=${DD_GIT_REPOSITORY_URL}
 ENV DD_GIT_COMMIT_SHA=${DD_GIT_COMMIT_SHA}
+# Default version when the image runs outside Kubernetes. In Kubernetes the pod label sets DD_VERSION.
+ENV DD_VERSION=${VERSION}
+ENV FAULT_MODE=${FAULT_MODE}
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.revision="${DD_GIT_COMMIT_SHA}"
 LABEL org.opencontainers.image.source="https://github.com/datadog-asean-se/storedog-go-apm-example"

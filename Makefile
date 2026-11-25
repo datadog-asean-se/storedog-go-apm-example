@@ -3,7 +3,7 @@ VERSION   := $(shell cat VERSION)
 IMAGE     ?= ghcr.io/datadog-asean-se/storedog-go-apm-example:$(VERSION)
 OVERLAY   ?= overlays/versions
 
-.PHONY: deploy deploy-versions deploy-single deploy-local build set-version version status logs destroy
+.PHONY: check-versions deploy deploy-versions deploy-single deploy-local build set-version version status logs destroy
 deploy:        ## Pull the prebuilt image from GHCR and deploy all three gateway versions to $(NAMESPACE) (no Docker needed)
 	IMAGE=$(IMAGE) NAMESPACE=$(NAMESPACE) OVERLAY=$(OVERLAY) ./scripts/deploy.sh
 deploy-versions: deploy  ## Same as deploy (kept for older instructions)
@@ -18,6 +18,8 @@ version:       ## Print the app version
 	@echo $(VERSION)
 set-version:   ## Change the version everywhere: make set-version V=1.1.0
 	./scripts/set-version.sh $(V)
+check-versions: ## Verify image tag, pod label and DD_VERSION match in every manifest (needs pyyaml)
+	python3 scripts/check-versions.py
 status:        ## Show pods and recent gateway logs
 	kubectl -n $(NAMESPACE) get pods -l 'app in (shop-gateway,shop-gateway-v2,shop-gateway-v3,shop-inventory,shop-payment,shop-loadgen)' -L tags.datadoghq.com/version
 logs:          ## Tail gateway logs (JSON, with dd.trace_id)
